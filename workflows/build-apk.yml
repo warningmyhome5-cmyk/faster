@@ -6,7 +6,8 @@ on:
     branches: [ "main", "master" ]
   pull_request:
     branches: [ "main", "master" ]
-  workflow_dispatch: # يتيح لك الضغط على Run workflow يدوياً من واجهة GitHub
+ # يتيح لك الضغط على Run workflow يدوياً من واجهة GitHub
+  workflow_dispatch: 
 
 jobs:
   build:
