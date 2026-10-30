@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">المساعد الصوتي المحلي</string>
+    <string name="offline_badge">يعمل محلياً بدون إنترنت 🟢</string>
+    <string name="speak_now">تحدث الآن</string>
+    <string name="listening_status">جارٍ الاستماع...</string>
+    <string name="calling_contact">جارٍ الاتصال بـ %s</string>
+    <string name="opening_app">جارٍ فتح تطبيق %s</string>
+    <string name="contact_not_found">الاسم غير موجود في جهات الاتصال</string>
+    <string name="app_not_found">التطبيق غير مثبت على هذا الهاتف</string>
+</resources>

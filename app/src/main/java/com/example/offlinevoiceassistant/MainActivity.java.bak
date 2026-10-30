@@ -1,0 +1,451 @@
+package com.example.offlinevoiceassistant;
+
+import android.Manifest;
+import android.app.SearchManager;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
+import android.database.Cursor;
+import android.net.Uri;
+import android.os.Bundle;
+import android.provider.ContactsContract;
+import android.speech.RecognitionListener;
+import android.speech.RecognizerIntent;
+import android.speech.SpeechRecognizer;
+import android.speech.tts.TextToSpeech;
+import android.view.View;
+import android.widget.Button;
+import android.widget.ProgressBar;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
+
+import com.google.android.material.card.MaterialCardView;
+import com.google.android.material.chip.Chip;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+/**
+ * تطبيق المساعد الصوتي المحلي دون إنترنت (Offline Voice Assistant) - نسخة Java
+ * متوافق تماماً مع الاستخراج كـ APK عبر GitHub Actions
+ */
+public class MainActivity extends AppCompatActivity implements TextToSpeech.OnInitListener {
+
+    private SpeechRecognizer speechRecognizer;
+    private Intent recognizerIntent;
+    private TextToSpeech textToSpeech;
+
+    // عناصر واجهة المستخدم
+    private Button btnMic;
+    private TextView tvStatus;
+    private TextView tvTranscript;
+    private TextView tvActionResult;
+    private MaterialCardView cardResult;
+    private ProgressBar progressBarListening;
+
+    // الصلاحيات الهامة
+    private final String[] requiredPermissions = new String[]{
+            Manifest.permission.RECORD_AUDIO,
+            Manifest.permission.CALL_PHONE,
+            Manifest.permission.READ_CONTACTS
+    };
+
+    // معالج طلب الصلاحيات في وقت التشغيل
+    private final ActivityResultLauncher<String[]> permissionLauncher =
+            registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), (Map<String, Boolean> result) -> {
+                Boolean recordAudioGranted = result.get(Manifest.permission.RECORD_AUDIO);
+                if (recordAudioGranted != null && recordAudioGranted) {
+                    tvStatus.setText("الصلاحيات جاهزة، اضغط على الميكروفون للتحدث");
+                } else {
+                    Toast.makeText(this, "صلاحية الميكروفون ضرورية للاستماع للأوامر", Toast.LENGTH_LONG).show();
+                    tvStatus.setText("يرجى منح صلاحية الميكروفون ليعمل التطبيق");
+                }
+            });
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        // ربط العناصر
+        btnMic = findViewById(R.id.btnMic);
+        tvStatus = findViewById(R.id.tvStatus);
+        tvTranscript = findViewById(R.id.tvTranscript);
+        tvActionResult = findViewById(R.id.tvActionResult);
+        cardResult = findViewById(R.id.cardResult);
+        progressBarListening = findViewById(R.id.progressBarListening);
+
+        // تهيئة محرك النطق
+        textToSpeech = new TextToSpeech(this, this);
+
+        // فحص وطلب الصلاحيات
+        checkAndRequestPermissions();
+
+        // تهيئة محرك التعرف الصوتي دون إنترنت
+        initSpeechRecognizer();
+
+        // زر الميكروفون
+        btnMic.setOnClickListener(v -> {
+            if (hasAudioPermission()) {
+                startOfflineListening();
+            } else {
+                checkAndRequestPermissions();
+            }
+        });
+
+        // أزرار سريعة للاختبار
+        Chip chipCall = findViewById(R.id.chipCallSample);
+        Chip chipApp = findViewById(R.id.chipAppSample);
+        Chip chipSearch = findViewById(R.id.chipSearchSample);
+
+        if (chipCall != null) chipCall.setOnClickListener(v -> handleSpokenCommand("اتصل بأحمد"));
+        if (chipApp != null) chipApp.setOnClickListener(v -> handleSpokenCommand("افتح واتساب"));
+        if (chipSearch != null) chipSearch.setOnClickListener(v -> handleSpokenCommand("ابحث عن مواقيت الصلاة"));
+    }
+
+    /**
+     * إعداد SpeechRecognizer وإجباره على وضع عدم الاتصال (Offline)
+     */
+    private void initSpeechRecognizer() {
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            tvStatus.setText("خدمة التعرف على الصوت غير متوفرة على هذا الجهاز");
+            btnMic.setEnabled(false);
+            return;
+        }
+
+        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this);
+
+        recognizerIntent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        recognizerIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        recognizerIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ar");
+        recognizerIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "ar");
+
+        // الأهم: وضع عدم الاتصال بالإنترنت محلياً
+        recognizerIntent.putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true);
+        recognizerIntent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+        recognizerIntent.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, getPackageName());
+        recognizerIntent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3);
+
+        speechRecognizer.setRecognitionListener(new RecognitionListener() {
+            @Override
+            public void onReadyForSpeech(Bundle params) {
+                progressBarListening.setVisibility(View.VISIBLE);
+                tvStatus.setText("جارٍ الاستماع... تحدث باللغة العربية الآن");
+                btnMic.setText("جارٍ الاستماع...");
+            }
+
+            @Override
+            public void onBeginningOfSpeech() {
+                tvStatus.setText("تم التقاط صوتك، جارٍ المعالجة محلياً...");
+            }
+
+            @Override
+            public void onRmsChanged(float rmsdB) {}
+
+            @Override
+            public void onBufferReceived(byte[] buffer) {}
+
+            @Override
+            public void onEndOfSpeech() {
+                progressBarListening.setVisibility(View.GONE);
+                tvStatus.setText("انتهى التحدث، جاري فحص الأمر...");
+                btnMic.setText("تحدث الآن");
+            }
+
+            @Override
+            public void onError(int error) {
+                progressBarListening.setVisibility(View.GONE);
+                btnMic.setText("تحدث الآن");
+
+                String errorMessage;
+                switch (error) {
+                    case SpeechRecognizer.ERROR_NETWORK:
+                    case SpeechRecognizer.ERROR_NETWORK_TIMEOUT:
+                        errorMessage = "تنبيه: محرك الصوت يطلب اتصالاً. تأكد من تنزيل حزمة العربية دون إنترنت من إعدادات جوجل.";
+                        break;
+                    case SpeechRecognizer.ERROR_NO_MATCH:
+                        errorMessage = "لم يتم تمييز أي كلام، حاول مجدداً بصوت أوضح.";
+                        break;
+                    case SpeechRecognizer.ERROR_SPEECH_TIMEOUT:
+                        errorMessage = "انتهى الوقت دون سماع صوت، اضغط للتحدث مرة أخرى.";
+                        break;
+                    case SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS:
+                        errorMessage = "يرجى منح صلاحية الميكروفون أولاً.";
+                        break;
+                    default:
+                        errorMessage = "حدث خطأ في معالجة الصوت (رمز: " + error + ")";
+                        break;
+                }
+                tvStatus.setText(errorMessage);
+                Toast.makeText(MainActivity.this, errorMessage, Toast.LENGTH_SHORT).show();
+            }
+
+            @Override
+            public void onResults(Bundle results) {
+                progressBarListening.setVisibility(View.GONE);
+                ArrayList<String> matches = results != null ? results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION) : null;
+                if (matches != null && !matches.isEmpty()) {
+                    String recognizedText = matches.get(0);
+                    tvTranscript.setText(recognizedText);
+                    handleSpokenCommand(recognizedText);
+                } else {
+                    tvStatus.setText("لم يتم التقاط أي نص");
+                }
+            }
+
+            @Override
+            public void onPartialResults(Bundle partialResults) {
+                ArrayList<String> partial = partialResults != null ? partialResults.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION) : null;
+                if (partial != null && !partial.isEmpty()) {
+                    tvTranscript.setText(partial.get(0));
+                }
+            }
+
+            @Override
+            public void onEvent(int eventType, Bundle params) {}
+        });
+    }
+
+    private void startOfflineListening() {
+        try {
+            speechRecognizer.startListening(recognizerIntent);
+        } catch (Exception e) {
+            Toast.makeText(this, "تعذر بدء الميكروفون: " + e.getLocalizedMessage(), Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    /**
+     * تحليل وتنفيذ الأمر العربي
+     */
+    private void handleSpokenCommand(String rawCommand) {
+        String normalized = normalizeArabic(rawCommand);
+        cardResult.setVisibility(View.VISIBLE);
+
+        // 1. فحص أمر المكالمات
+        Pattern callPattern = Pattern.compile("^(?:اتصل(?:\\s*(?:بـ|ب|علي|على))?|كلم|رن(?:\\s*(?:علي|على))?)\\s+(.+)$", Pattern.CASE_INSENSITIVE);
+        Matcher callMatcher = callPattern.matcher(normalized);
+
+        if (callMatcher.find()) {
+            String contactName = callMatcher.group(1).trim();
+            makePhoneCallToContact(contactName);
+            return;
+        }
+
+        // 2. فحص أمر التطبيقات
+        Pattern appPattern = Pattern.compile("^(?:افتح(?:لي)?|شغل(?:ي)?|فتح|تشغيل)\\s+(.+)$", Pattern.CASE_INSENSITIVE);
+        Matcher appMatcher = appPattern.matcher(normalized);
+
+        if (appMatcher.find()) {
+            String appName = appMatcher.group(1).trim();
+            openInstalledApplication(appName);
+            return;
+        }
+
+        // 3. البحث بالمتصفح أو أمر عام
+        Pattern searchPattern = Pattern.compile("^(?:ابحث(?:\\s*(?:عن|في))?|دور(?:\\s*(?:علي|على|عن))?|سيرش)\\s+(.+)$", Pattern.CASE_INSENSITIVE);
+        Matcher searchMatcher = searchPattern.matcher(normalized);
+        String query = searchMatcher.find() ? searchMatcher.group(1).trim() : rawCommand;
+
+        performWebSearch(query);
+    }
+
+    /**
+     * البحث في جهات الاتصال والاتصال المباشر
+     */
+    private void makePhoneCallToContact(String targetName) {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
+            tvActionResult.setText("صلاحية قراءة جهات الاتصال غير ممنوحة");
+            speakOut("يرجى منح صلاحية جهات الاتصال أولاً");
+            return;
+        }
+
+        tvStatus.setText("جارٍ البحث عن: " + targetName + " في الأسماء...");
+        String phoneNumber = findPhoneNumberByName(targetName);
+
+        if (phoneNumber != null) {
+            tvActionResult.setText("تم العثور على الرقم: " + phoneNumber + "\nجارٍ الاتصال المباشر...");
+            speakOut("جارٍ الاتصال بـ " + targetName);
+
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
+                Intent callIntent = new Intent(Intent.ACTION_CALL);
+                callIntent.setData(Uri.parse("tel:" + phoneNumber));
+                startActivity(callIntent);
+            } else {
+                Intent dialIntent = new Intent(Intent.ACTION_DIAL);
+                dialIntent.setData(Uri.parse("tel:" + phoneNumber));
+                startActivity(dialIntent);
+            }
+        } else {
+            String notFound = "لم يتم العثور على اسم \"" + targetName + "\" في سجل الهاتف";
+            tvActionResult.setText(notFound);
+            speakOut("لم أجد هذا الاسم في جهات اتصالك");
+            Toast.makeText(this, notFound, Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private String findPhoneNumberByName(String targetName) {
+        String targetNorm = normalizeArabic(targetName);
+        Uri uri = ContactsContract.CommonDataKinds.Phone.CONTENT_URI;
+        String[] projection = new String[]{
+                ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+                ContactsContract.CommonDataKinds.Phone.NUMBER
+        };
+
+        Cursor cursor = null;
+        try {
+            cursor = getContentResolver().query(uri, projection, null, null, null);
+            if (cursor != null && cursor.moveToFirst()) {
+                int nameIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME);
+                int numberIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER);
+
+                do {
+                    String contactName = cursor.getString(nameIndex);
+                    if (contactName == null) continue;
+                    String contactNorm = normalizeArabic(contactName);
+
+                    if (contactNorm.equals(targetNorm) ||
+                            contactNorm.contains(targetNorm) ||
+                            targetNorm.contains(contactNorm)) {
+                        return cursor.getString(numberIndex);
+                    }
+                } while (cursor.moveToNext());
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            if (cursor != null) cursor.close();
+        }
+        return null;
+    }
+
+    /**
+     * فحص التطبيقات المثبتة وتشغيل التطبيق المطلوب
+     */
+    private void openInstalledApplication(String targetAppName) {
+        String cleanTarget = normalizeArabic(targetAppName);
+        if (cleanTarget.startsWith("ال") && cleanTarget.length() > 3) {
+            cleanTarget = cleanTarget.substring(2);
+        }
+
+        tvStatus.setText("جارٍ البحث عن تطبيق: " + targetAppName + "...");
+        PackageManager pm = getPackageManager();
+
+        Intent mainIntent = new Intent(Intent.ACTION_MAIN, null);
+        mainIntent.addCategory(Intent.CATEGORY_LAUNCHER);
+
+        List<ResolveInfo> resolveInfoList = pm.queryIntentActivities(mainIntent, 0);
+
+        String foundPackage = null;
+        String foundLabel = null;
+
+        for (ResolveInfo resolveInfo : resolveInfoList) {
+            String appLabel = resolveInfo.loadLabel(pm).toString();
+            String labelNorm = normalizeArabic(appLabel);
+            if (labelNorm.startsWith("ال") && labelNorm.length() > 3) {
+                labelNorm = labelNorm.substring(2);
+            }
+
+            if (labelNorm.equals(cleanTarget) ||
+                    labelNorm.contains(cleanTarget) ||
+                    cleanTarget.contains(labelNorm)) {
+                foundPackage = resolveInfo.activityInfo.packageName;
+                foundLabel = appLabel;
+                break;
+            }
+        }
+
+        if (foundPackage != null) {
+            Intent launchIntent = pm.getLaunchIntentForPackage(foundPackage);
+            if (launchIntent != null) {
+                tvActionResult.setText("تم العثور على التطبيق: " + foundLabel + "\nحزمة: " + foundPackage + "\nجارٍ التشغيل...");
+                speakOut("جارٍ فتح " + foundLabel);
+                startActivity(launchIntent);
+            } else {
+                tvActionResult.setText("تعذر تشغيل التطبيق (لا يوجد واجهة تشغيل)");
+            }
+        } else {
+            String notFound = "التطبيق \"" + targetAppName + "\" غير مثبت على هذا الهاتف";
+            tvActionResult.setText(notFound);
+            speakOut("لم أجد هذا التطبيق مثبت على الهاتف");
+            Toast.makeText(this, notFound, Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void performWebSearch(String query) {
+        tvActionResult.setText("جارٍ تنفيذ البحث عن: \"" + query + "\"");
+        speakOut("جارٍ البحث عن " + query);
+
+        try {
+            Intent searchIntent = new Intent(Intent.ACTION_WEB_SEARCH);
+            searchIntent.putExtra(SearchManager.QUERY, query);
+            startActivity(searchIntent);
+        } catch (Exception e) {
+            Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=" + Uri.encode(query)));
+            startActivity(browserIntent);
+        }
+    }
+
+    private String normalizeArabic(String input) {
+        if (input == null) return "";
+        return input.trim().toLowerCase()
+                .replaceAll("[\\u064B-\\u065F\\u0670]", "")
+                .replace("ـ", "")
+                .replaceAll("[أإآٱ]", "ا")
+                .replace("ة", "ه")
+                .replace("ى", "ي")
+                .replaceAll("[^\\u0600-\\u06FFa-zA-Z0-9\\s]", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
+    }
+
+    private void checkAndRequestPermissions() {
+        List<String> list = new ArrayList<>();
+        for (String perm : requiredPermissions) {
+            if (ContextCompat.checkSelfPermission(this, perm) != PackageManager.PERMISSION_GRANTED) {
+                list.add(perm);
+            }
+        }
+        if (!list.isEmpty()) {
+            permissionLauncher.launch(list.toArray(new String[0]));
+        }
+    }
+
+    private boolean hasAudioPermission() {
+        return ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private void speakOut(String text) {
+        if (textToSpeech != null) {
+            textToSpeech.speak(text, TextToSpeech.QUEUE_FLUSH, null, "tts_java");
+        }
+    }
+
+    @Override
+    public void onInit(int status) {
+        if (status == TextToSpeech.SUCCESS && textToSpeech != null) {
+            int result = textToSpeech.setLanguage(new Locale("ar"));
+            if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+                textToSpeech.setLanguage(Locale.getDefault());
+            }
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (speechRecognizer != null) speechRecognizer.destroy();
+        if (textToSpeech != null) {
+            textToSpeech.stop();
+            textToSpeech.shutdown();
+        }
+    }
+}

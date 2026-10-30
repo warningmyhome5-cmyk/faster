@@ -1,0 +1,234 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout 
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/colorBackground"
+    android:layoutDirection="rtl"
+    tools:context=".MainActivity">
+
+    <com.google.android.material.appbar.AppBarLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/colorPrimary">
+
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/topAppBar"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            app:title="@string/app_name"
+            app:titleTextColor="@android:color/white"
+            app:subtitle="@string/offline_badge"
+            app:subtitleTextColor="@color/colorAccentLight" />
+    </com.google.android.material.appbar.AppBarLayout>
+
+    <androidx.core.widget.NestedScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="20dp"
+            android:gravity="center_horizontal">
+
+            <!-- شارة الحالة: يعمل دون إنترنت -->
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                app:cardBackgroundColor="@color/colorOfflineBadgeBg"
+                app:strokeColor="@color/colorOfflineBadgeBorder"
+                app:strokeWidth="1dp"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="0dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:padding="12dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="🟢"
+                        android:textSize="16sp"
+                        android:layout_marginStart="8dp"/>
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="نظام التعرف الصوتي المحلي يعمل بدون اتصال بالإنترنت نهائياً (Offline)."
+                        android:textColor="@color/colorOfflineBadgeText"
+                        android:textSize="13sp"
+                        android:fontFamily="sans-serif-medium"/>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- نص الحالة المتغير -->
+            <TextView
+                android:id="@+id/tvStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="اضغط على زر الميكروفون وتحدث بأمر صوتي..."
+                android:textColor="@color/colorTextSecondary"
+                android:textSize="16sp"
+                android:textAlignment="center"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="16dp"/>
+
+            <!-- شريط تقدم أثناء الاستماع -->
+            <ProgressBar
+                android:id="@+id/progressBarListening"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:visibility="gone"
+                android:indeterminate="true"
+                android:indeterminateTint="@color/colorPrimary"
+                android:layout_marginBottom="16dp"/>
+
+            <!-- زر الميكروفون الكبير مع تأثير Ripple -->
+            <FrameLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginVertical="12dp">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnMic"
+                    android:layout_width="160dp"
+                    android:layout_height="160dp"
+                    android:text="تحدث الآن"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:textColor="@android:color/white"
+                    app:backgroundTint="@color/colorPrimary"
+                    app:cornerRadius="80dp"
+                    app:elevation="8dp"
+                    app:icon="@android:drawable/ic_btn_speak_now"
+                    app:iconGravity="top"
+                    app:iconSize="48dp"
+                    app:iconTint="@android:color/white"/>
+            </FrameLayout>
+
+            <!-- بطاقة عرض النص المنطوق المباشر -->
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="2dp"
+                app:cardBackgroundColor="@android:color/white">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="النص الصوتي المستخرج:"
+                        android:textColor="@color/colorPrimary"
+                        android:textSize="14sp"
+                        android:textStyle="bold"/>
+
+                    <TextView
+                        android:id="@+id/tvTranscript"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="لم يتم التحدث بعد..."
+                        android:textColor="@color/colorTextPrimary"
+                        android:textSize="17sp"
+                        android:minLines="2"/>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- بطاقة عرض الإجراء المنفذ (مكالمة / تشغيل تطبيق / بحث) -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardResult"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:visibility="gone"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="3dp"
+                app:cardBackgroundColor="@color/colorResultCardBg"
+                app:strokeColor="@color/colorPrimaryLight"
+                app:strokeWidth="1dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="الإجراء المنفذ محلياً:"
+                        android:textColor="@color/colorPrimary"
+                        android:textSize="14sp"
+                        android:textStyle="bold"/>
+
+                    <TextView
+                        android:id="@+id/tvActionResult"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="جاري المعالجة..."
+                        android:textColor="@color/colorTextPrimary"
+                        android:textSize="15sp"/>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- صيغ الأوامر السريعة للاختبار -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:text="أمثلة للأوامر المدعومة (اضغط للتجربة السريعة):"
+                android:textColor="@color/colorTextSecondary"
+                android:textSize="13sp"
+                android:textStyle="bold"/>
+
+            <com.google.android.material.chip.ChipGroup
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp">
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chipCallSample"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="📞 اتصل بأحمد"
+                    app:chipBackgroundColor="@color/colorChipBg"/>
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chipAppSample"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="🚀 افتح واتساب"
+                    app:chipBackgroundColor="@color/colorChipBg"/>
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chipSearchSample"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="🔍 ابحث عن مواقيت الصلاة"
+                    app:chipBackgroundColor="@color/colorChipBg"/>
+            </com.google.android.material.chip.ChipGroup>
+
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

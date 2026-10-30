@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorPrimary">#0D9488</color>
+    <color name="colorPrimaryDark">#0F766E</color>
+    <color name="colorPrimaryLight">#99F6E4</color>
+    <color name="colorAccent">#F59E0B</color>
+    <color name="colorAccentLight">#FEF3C7</color>
+    <color name="colorBackground">#F8FAFC</color>
+    <color name="colorTextPrimary">#0F172A</color>
+    <color name="colorTextSecondary">#64748B</color>
+    <color name="colorOfflineBadgeBg">#ECFDF5</color>
+    <color name="colorOfflineBadgeBorder">#A7F3D0</color>
+    <color name="colorOfflineBadgeText">#065F46</color>
+    <color name="colorResultCardBg">#F0FDFA</color>
+    <color name="colorChipBg">#E2E8F0</color>
+</resources>
